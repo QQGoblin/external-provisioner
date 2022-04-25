@@ -698,6 +698,13 @@ func (p *csiProvisioner) prepareProvision(ctx context.Context, claim *v1.Persist
 		req.Parameters[pvcNameKey] = claim.GetName()
 		req.Parameters[pvcNamespaceKey] = claim.GetNamespace()
 		req.Parameters[pvNameKey] = pvName
+
+		// add pvc annotations to req.Parameters
+		for k, v := range claim.Annotations {
+			if strings.HasPrefix(k, p.driverName) {
+				req.Parameters[k] = v
+			}
+		}
 	}
 	deletionAnnSecrets := new(deletionSecretParams)
 
