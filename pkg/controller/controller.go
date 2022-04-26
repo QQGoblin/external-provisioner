@@ -135,6 +135,9 @@ const (
 	snapshotNotBound = "snapshot %s not bound"
 
 	pvcCloneFinalizer = "provisioner.storage.kubernetes.io/cloning-protection"
+
+	annDeleteProtection = "csi.ruijie.io/delete-protection"
+	annPVReclaimPolicy  = "csi.ruijie.io/reclaimPolicy"
 )
 
 var (
@@ -845,8 +848,19 @@ func (p *csiProvisioner) Provision(ctx context.Context, options controller.Provi
 		},
 	}
 
-	if options.StorageClass.ReclaimPolicy != nil {
+	annPVReclaimPolicy, ok := claim.Annotations[annPVReclaimPolicy]
+
+	if !ok && options.StorageClass.ReclaimPolicy != nil {
 		pv.Spec.PersistentVolumeReclaimPolicy = *options.StorageClass.ReclaimPolicy
+	} else {
+		switch strings.ToLower(annPVReclaimPolicy) {
+		case "delete":
+			pv.Spec.PersistentVolumeReclaimPolicy = v1.PersistentVolumeReclaimDelete
+		case "retain":
+			pv.Spec.PersistentVolumeReclaimPolicy = v1.PersistentVolumeReclaimRetain
+		default:
+			klog.V(2).Infof("unsupport reclaim %s for pvc %s/%s.", annPVReclaimPolicy, claim.Namespace, claim.Name)
+		}
 	}
 
 	if p.supportsTopology() {
@@ -860,6 +874,14 @@ func (p *csiProvisioner) Provision(ctx context.Context, options controller.Provi
 	// Set FSType if PV is not Block Volume
 	if !util.CheckPersistentVolumeClaimModeBlock(options.PVC) {
 		pv.Spec.PersistentVolumeSource.CSI.FSType = result.fsType
+	}
+
+	// add annDeleteProtection
+	if _, ok := claim.Annotations[annDeleteProtection]; ok {
+		if pv.Annotations == nil {
+			pv.Annotations = make(map[string]string)
+		}
+		pv.Annotations[annDeleteProtection] = ""
 	}
 
 	klog.V(2).Infof("successfully created PV %v for PVC %v and csi volume name %v", pv.Name, options.PVC.Name, pv.Spec.CSI.VolumeHandle)
@@ -1207,6 +1229,12 @@ func (p *csiProvisioner) Delete(ctx context.Context, volume *v1.PersistentVolume
 		return err
 	}
 
+	if _, ok := volume.Annotations[annDeleteProtection]; ok {
+		klog.V(2).Infof("PVC %s/%s is set csi.ruijie.io/delete-protection, we do not delete storage.",
+			volume.Spec.ClaimRef.Namespace,
+			volume.Spec.ClaimRef.Name)
+		return nil
+	}
 	_, err = p.csiClient.DeleteVolume(deleteCtx, &req)
 
 	return err
