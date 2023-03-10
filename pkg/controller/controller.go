@@ -59,7 +59,7 @@ import (
 	snapclientset "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
 )
 
-//secretParamsMap provides a mapping of current as well as deprecated secret keys
+// secretParamsMap provides a mapping of current as well as deprecated secret keys
 type secretParamsMap struct {
 	name                         string
 	deprecatedSecretNameKey      string
@@ -377,6 +377,9 @@ func NewCSIProvisioner(client kubernetes.Interface,
 		// Remove deleted PVCs from rate limiter.
 		claimHandler := cache.ResourceEventHandlerFuncs{
 			DeleteFunc: func(obj interface{}) {
+				if unknown, ok := obj.(cache.DeletedFinalStateUnknown); ok && unknown.Obj != nil {
+					obj = unknown.Obj
+				}
 				if claim, ok := obj.(*v1.PersistentVolumeClaim); ok {
 					provisioner.nodeDeployment.rateLimiter.Forget(claim.UID)
 				}
@@ -1305,7 +1308,7 @@ func (p *csiProvisioner) ShouldProvision(ctx context.Context, claim *v1.Persiste
 	return true
 }
 
-//TODO use a unique volume handle from and to Id
+// TODO use a unique volume handle from and to Id
 func (p *csiProvisioner) volumeIdToHandle(id string) string {
 	return id
 }
@@ -1618,7 +1621,9 @@ func verifyAndGetSecretNameAndNamespaceTemplate(secret secretParamsMap, storageC
 }
 
 // getSecretReference returns a reference to the secret specified in the given nameTemplate
-//  and namespaceTemplate, or an error if the templates are not specified correctly.
+//
+//	and namespaceTemplate, or an error if the templates are not specified correctly.
+//
 // no lookup of the referenced secret is performed, and the secret may or may not exist.
 //
 // supported tokens for name resolution:

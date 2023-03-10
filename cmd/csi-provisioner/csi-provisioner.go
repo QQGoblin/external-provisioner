@@ -37,6 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	validation "k8s.io/apimachinery/pkg/util/validation"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -444,7 +445,7 @@ func main() {
 
 		managedByID := "external-provisioner"
 		if *enableNodeDeployment {
-			managedByID += "-" + node
+			managedByID = getNameWithMaxLength(managedByID, node, validation.DNS1035LabelMaxLength)
 		}
 
 		// We only need objects from our own namespace. The normal factory would give
@@ -571,6 +572,7 @@ func main() {
 		le.WithLeaseDuration(*leaderElectionLeaseDuration)
 		le.WithRenewDeadline(*leaderElectionRenewDeadline)
 		le.WithRetryPeriod(*leaderElectionRetryPeriod)
+		le.WithIdentity(identity)
 
 		if err := le.Run(); err != nil {
 			klog.Fatalf("failed to initialize leader election: %v", err)
